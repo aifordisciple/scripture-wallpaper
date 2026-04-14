@@ -9,10 +9,16 @@ import "./styles.css";
 interface AppConfig {
   font_size: number;
   update_time: string;
-  font_path: string;
+  font_name: string;
   wallpaper_mode: "bing" | "picsum" | "local";
   local_folder: string;
   img_api_url: string;
+  scripture_version: "和合本" | "NIV";
+}
+
+interface FontOption {
+  id: string;
+  display_name: string;
 }
 
 type TabId = "dashboard" | "favorites" | "settings" | "logs";
@@ -56,6 +62,8 @@ function App() {
   const [currentScripture, setCurrentScripture] = useState<string | null>(null);
   const [currentWallpaperPath, setCurrentWallpaperPath] = useState<string | null>(null);
   const [favorites, setFavorites] = useState<FavoriteItem[]>([]);
+  const [fontList, setFontList] = useState<FontOption[]>([]);
+  const [fontDownloading, setFontDownloading] = useState(false);
   const logsEndRef = useRef<HTMLDivElement>(null);
 
   const addLog = (msg: string) => setLogs((prev) => [...prev, msg]);
@@ -95,6 +103,13 @@ function App() {
         addLog(`[系统] ${dbRes}`);
 
         await loadFavorites();
+
+        try {
+          const fonts = await invoke<FontOption[]>("get_font_list");
+          setFontList(fonts);
+        } catch {
+          // Font list may not be available yet
+        }
 
         try {
           const autostartStatus = await isEnabled();
@@ -142,6 +157,7 @@ function App() {
     try {
       const [content, reference] = await invoke<[string, string]>("get_random_scripture", {
         dbPath: "scriptures.db",
+        version: config.scripture_version,
       });
       const fullText = `${content} —— ${reference}`;
       setCurrentScripture(fullText);
@@ -173,7 +189,7 @@ function App() {
         inputPath: inputImagePath,
         outputPath: outputFilename,
         text: fullText,
-        fontPath: config.font_path,
+        fontName: config.font_name,
         fontSize: config.font_size,
       });
 
@@ -397,6 +413,24 @@ function App() {
             <div className="settings-subtitle">自定义壁纸数据源、排版样式和系统行为。</div>
 
             <div className="settings-group">
+              {/* Scripture Version */}
+              <div className="settings-card">
+                <div className="settings-card-row">
+                  <div className="settings-label">经文译本</div>
+                  <div className="settings-description">选择桌面壁纸上显示的圣经译本</div>
+                  <select
+                    className="settings-select"
+                    value={config.scripture_version}
+                    onChange={(e) =>
+                      setConfig({ ...config, scripture_version: e.target.value as AppConfig["scripture_version"] })
+                    }
+                  >
+                    <option value="和合本">和合本（中文）</option>
+                    <option value="NIV">NIV（English）</option>
+                  </select>
+                </div>
+              </div>
+
               {/* Wallpaper Source */}
               <div className="settings-card">
                 <div className="settings-card-row">
@@ -471,15 +505,41 @@ function App() {
                 </div>
 
                 <div className="settings-card-row">
-                  <div className="settings-label">本地字体路径</div>
-                  <div className="settings-description">指定 .ttf 或 .ttc 字体文件路径</div>
-                  <input
-                    className="settings-input"
-                    type="text"
-                    value={config.font_path}
-                    onChange={(e) => setConfig({ ...config, font_path: e.target.value })}
-                    placeholder="/System/Library/Fonts/PingFang.ttc"
-                  />
+                  <div className="settings-label">经文字体</div>
+                  <div className="settings-description">选择叠加在壁纸上的中文字体（首次使用时自动下载）</div>
+                  <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                    <select
+                      className="settings-select"
+                      style={{ flex: 1 }}
+                      value={config.font_name}
+                      onChange={(e) => setConfig({ ...config, font_name: e.target.value })}
+                    >
+                      {fontList.map((font) => (
+                        <option key={font.id} value={font.id}>
+                          {font.display_name}
+                        </option>
+                      ))}
+                    </select>
+                    <button
+                      className="btn btn-ghost"
+                      style={{ whiteSpace: "nowrap", fontSize: "12px", padding: "6px 12px" }}
+                      disabled={fontDownloading}
+                      onClick={async () => {
+                        if (!config) return;
+                        setFontDownloading(true);
+                        try {
+                          await invoke("ensure_font_downloaded", { fontName: config.font_name });
+                          addLog(`[字体] ${config.font_name} 已就绪`);
+                        } catch (err) {
+                          addLog(`[字体错误] 下载失败: ${err}`);
+                        } finally {
+                          setFontDownloading(false);
+                        }
+                      }}
+                    >
+                      {fontDownloading ? "下载中..." : "预下载"}
+                    </button>
+                  </div>
                 </div>
               </div>
 
