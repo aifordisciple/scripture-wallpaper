@@ -192,7 +192,7 @@ async fn fetch_bing_daily(app: AppHandle, save_path: String) -> Result<String, S
     }
 
     let path_clone = path.clone();
-    let _result = tokio::task::spawn_blocking(move || {
+    tokio::task::spawn_blocking(move || {
         // Request 30 days of wallpapers, then pick one randomly
         let api_url = "https://www.bing.com/HPImageArchive.aspx?format=js&idx=0&n=30&mkt=zh-CN";
 
@@ -241,15 +241,13 @@ async fn get_random_local_image(folder_path: String) -> Result<String, String> {
     let entries = fs::read_dir(&folder_path).map_err(|e| format!("无法读取文件夹: {}", e))?;
     let mut images = Vec::new();
 
-    for entry in entries {
-        if let Ok(entry) = entry {
-            let path = entry.path();
-            if path.is_file() {
-                if let Some(ext) = path.extension().and_then(|s| s.to_str()) {
-                    let ext = ext.to_lowercase();
-                    if ext == "jpg" || ext == "jpeg" || ext == "png" {
-                        images.push(path.to_string_lossy().to_string());
-                    }
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.is_file() {
+            if let Some(ext) = path.extension().and_then(|s| s.to_str()) {
+                let ext = ext.to_lowercase();
+                if ext == "jpg" || ext == "jpeg" || ext == "png" {
+                    images.push(path.to_string_lossy().to_string());
                 }
             }
         }
