@@ -1,0 +1,54 @@
+{
+  "$schema": "https://raw.githubusercontent.com/nicegui/tauri-v2/main/tooling/cli/schema.json",
+  "productName": "ScriptureWallpaper",
+  "version": "1.0.0",
+  "identifier": "com.scripture.wallpaper",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "devUrl": "http://localhost:1420",
+    "beforeBuildCommand": "npm run build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "经文壁纸 Scripture Wallpaper",
+        "width": 800,
+        "height": 600,
+        "resizable": true,
+        "fullscreen": false,
+        "visible": true
+      }
+    ],
+    "security": {
+      "csp": null,
+      "assetProtocol": {
+        "enable": true,
+        "scope": {
+          "allow": ["$APPDATA/**", "$RESOURCE/**"]
+        }
+      }
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "category": "Utility",
+    "copyright": "Copyright © 2026",
+    "shortDescription": "每日经文壁纸",
+    "longDescription": "一款专为基督徒设计的每日经文壁纸应用，本地优先，支持多图库源。",
+    "macOS": {
+      "signingIdentity": null
+    },
+    "windows": {
+      "digestAlgorithm": "sha256"
+    }
+  }
+}
