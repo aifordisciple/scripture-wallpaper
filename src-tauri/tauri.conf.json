@@ -32,7 +32,7 @@
   },
   "bundle": {
     "active": true,
-    "targets": ["app"],
+    "targets": "all",
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
@@ -42,8 +42,8 @@
     ],
     "category": "Utility",
     "copyright": "Copyright © 2026",
-    "shortDescription": "每日经文壁纸",
-    "longDescription": "一款专为基督徒设计的每日经文壁纸应用，本地优先，支持多图库源。",
+    "shortDescription": "Daily Scripture Wallpaper",
+    "longDescription": "A daily scripture wallpaper app for Christians, local-first with multiple image sources.",
     "macOS": {
       "signingIdentity": null
     },
