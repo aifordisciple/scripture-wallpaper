@@ -472,7 +472,7 @@ function App() {
                       type="text"
                       value={config.img_api_url}
                       onChange={(e) => setConfig({ ...config, img_api_url: e.target.value })}
-                      placeholder="https://picsum.photos/1920/1080"
+                      placeholder="https://picsum.photos/3840/2160"
                     />
                   </div>
                 )}

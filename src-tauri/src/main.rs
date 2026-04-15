@@ -532,23 +532,32 @@ async fn generate_wallpaper(
     let bottom_third_height = (image_height - y_start) as f32;
     let block_start_y = bottom_third_top + (bottom_third_height - total_block_height) / 2.0;
 
-    // Draw each line with shadow
-    let x_position = margin_x as i32;
+    // Draw each line centered horizontally with shadow
     for (i, line) in lines.iter().enumerate() {
         let y = (block_start_y + line_height * i as f32) as i32;
+
+        // Measure line width for horizontal centering
+        let line_width: f32 = line
+            .chars()
+            .map(|ch| {
+                let glyph_id = scaled_font.glyph_id(ch);
+                scaled_font.h_advance(glyph_id)
+            })
+            .sum();
+        let x_centered = ((image_width as f32 - line_width) / 2.0) as i32;
 
         // Shadow (offset +2px)
         draw_text_mut(
             &mut img,
             shadow_color,
-            x_position + 2,
+            x_centered + 2,
             y + 2,
             scale,
             &font,
             line,
         );
         // Main text
-        draw_text_mut(&mut img, text_color, x_position, y, scale, &font, line);
+        draw_text_mut(&mut img, text_color, x_centered, y, scale, &font, line);
     }
 
     // Convert RGBA to RGB for JPEG compatibility
@@ -645,7 +654,7 @@ impl Default for AppConfig {
             font_name: "NotoSansSC".to_string(),
             wallpaper_mode: "bing".to_string(),
             local_folder: String::new(),
-            img_api_url: "https://picsum.photos/1920/1080".to_string(),
+            img_api_url: "https://picsum.photos/3840/2160".to_string(),
             scripture_version: default_scripture_version(),
         }
     }
@@ -678,7 +687,7 @@ async fn load_config(app: AppHandle, config_path: String) -> Result<AppConfig, S
             serde_json::from_str(&data).unwrap_or_else(|_| AppConfig::default());
         // Fix legacy grayscale URL
         if config.img_api_url.contains("grayscale") {
-            config.img_api_url = "https://picsum.photos/1920/1080".to_string();
+            config.img_api_url = "https://picsum.photos/3840/2160".to_string();
         }
         // Validate font_name — reset to default if unknown
         if !BUILTIN_FONTS.iter().any(|f| f.id == config.font_name) {
