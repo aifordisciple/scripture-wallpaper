@@ -356,9 +356,13 @@ async fn fetch_bing_daily(app: AppHandle, save_path: String) -> Result<String, S
     Ok(format!("Bing 壁纸已成功拉取至: {}", path_str))
 }
 
-/// Fetch Unsplash random high-quality photo (no API key needed)
+/// Fetch Pexels random high-quality photo (requires free API key from pexels.com)
 #[tauri::command]
-async fn fetch_unsplash(app: AppHandle, save_path: String) -> Result<String, String> {
+async fn fetch_pexels(
+    app: AppHandle,
+    save_path: String,
+    api_key: String,
+) -> Result<String, String> {
     let path = resolve_path(&app, &save_path)?;
 
     if let Some(parent) = path.parent() {
@@ -367,27 +371,45 @@ async fn fetch_unsplash(app: AppHandle, save_path: String) -> Result<String, Str
 
     let path_clone = path.clone();
     tokio::task::spawn_blocking(move || {
-        // Unsplash Source API — redirects to a random photo, no API key required
-        // Request 3840x2160 landscape for wallpaper use
-        let url = "https://source.unsplash.com/random/3840x2160?landscape,nature";
+        // Pexels API — search for landscape wallpapers
+        let url = "https://api.pexels.com/v1/search?query=landscape+nature&orientation=landscape&size=large&per_page=15&page=1";
 
-        let client = reqwest::blocking::Client::builder()
-            .redirect(reqwest::redirect::Policy::limited(10))
-            .build()
-            .map_err(|e| format!("创建 HTTP 客户端失败: {}", e))?;
-
-        let resp = client
+        let resp = reqwest::blocking::Client::new()
             .get(url)
-            .header("Accept", "image/jpeg,image/png")
+            .header("Authorization", &api_key)
             .send()
-            .map_err(|e| format!("Unsplash 请求失败: {}", e))?;
+            .map_err(|e| format!("Pexels API 请求失败: {}", e))?;
 
         let status = resp.status();
         if !status.is_success() {
-            return Err(format!("Unsplash 下载失败 (HTTP {})", status));
+            return Err(format!(
+                "Pexels API 失败 (HTTP {})，请检查 API Key 是否正确",
+                status
+            ));
         }
 
-        let bytes = resp
+        let json: serde_json::Value = resp.json().map_err(|e| format!("解析 JSON 失败: {}", e))?;
+
+        let photos = json["photos"]
+            .as_array()
+            .ok_or("无法从 Pexels 数据中提取图片列表")?;
+
+        if photos.is_empty() {
+            return Err("Pexels 未返回任何图片".to_string());
+        }
+
+        let mut rng = rand::thread_rng();
+        let idx = rng.gen_range(0..photos.len());
+
+        // Prefer the "landscape" size, fallback to "large"
+        let img_url = photos[idx]["src"]["landscape"]
+            .as_str()
+            .or_else(|| photos[idx]["src"]["large"].as_str())
+            .ok_or("无法从 Pexels 数据中提取 URL")?;
+
+        let img_resp =
+            reqwest::blocking::get(img_url).map_err(|e| format!("下载图片失败: {}", e))?;
+        let bytes = img_resp
             .bytes()
             .map_err(|e| format!("读取图片流失败: {}", e))?;
 
@@ -401,7 +423,7 @@ async fn fetch_unsplash(app: AppHandle, save_path: String) -> Result<String, Str
     .map_err(|e| format!("任务执行失败: {}", e))??;
 
     let path_str = path.to_string_lossy().to_string();
-    Ok(format!("Unsplash 壁纸已成功拉取至: {}", path_str))
+    Ok(format!("Pexels 壁纸已成功拉取至: {}", path_str))
 }
 
 /// Fetch Wallhaven random high-quality wallpaper (no API key needed for trending)
@@ -740,6 +762,8 @@ pub struct AppConfig {
     pub img_api_url: String,
     #[serde(default = "default_scripture_version")]
     pub scripture_version: String,
+    #[serde(default)]
+    pub pexels_api_key: String,
 }
 
 fn default_scripture_version() -> String {
@@ -756,6 +780,7 @@ impl Default for AppConfig {
             local_folder: String::new(),
             img_api_url: "https://picsum.photos/3840/2160".to_string(),
             scripture_version: default_scripture_version(),
+            pexels_api_key: "lKBIS9N35Ob1CSBCURDyKbDbJOrIISj6MTikfAMo6VA7tCKcHWnbsgZK".to_string(),
         }
     }
 }
@@ -792,6 +817,10 @@ async fn load_config(app: AppHandle, config_path: String) -> Result<AppConfig, S
         // Validate font_name — reset to default if unknown
         if !BUILTIN_FONTS.iter().any(|f| f.id == config.font_name) {
             config.font_name = "NotoSansSC".to_string();
+        }
+        // Migration: fill default Pexels API key if empty
+        if config.pexels_api_key.is_empty() {
+            config.pexels_api_key = "lKBIS9N35Ob1CSBCURDyKbDbJOrIISj6MTikfAMo6VA7tCKcHWnbsgZK".to_string();
         }
         Ok(config)
     } else {
@@ -1027,7 +1056,7 @@ pub fn run() {
             get_random_scripture,
             download_image,
             fetch_bing_daily,
-            fetch_unsplash,
+            fetch_pexels,
             fetch_wallhaven,
             get_random_local_image,
             generate_wallpaper,

@@ -10,10 +10,11 @@ interface AppConfig {
   font_size: number;
   update_time: string;
   font_name: string;
-  wallpaper_mode: "bing" | "picsum" | "unsplash" | "wallhaven" | "local";
+  wallpaper_mode: "bing" | "picsum" | "pexels" | "wallhaven" | "local";
   local_folder: string;
   img_api_url: string;
   scripture_version: "和合本" | "NIV";
+  pexels_api_key: string;
 }
 
 interface FontOption {
@@ -169,9 +170,12 @@ function App() {
       if (config.wallpaper_mode === "bing") {
         addLog(">> 正在拉取 Bing 壁纸...");
         await invoke("fetch_bing_daily", { savePath: inputImagePath });
-      } else if (config.wallpaper_mode === "unsplash") {
-        addLog(">> 正在拉取 Unsplash 高清壁纸...");
-        await invoke("fetch_unsplash", { savePath: inputImagePath });
+      } else if (config.wallpaper_mode === "pexels") {
+        if (!config.pexels_api_key) {
+          throw new Error("请先在偏好设置中配置 Pexels API Key");
+        }
+        addLog(">> 正在拉取 Pexels 高清壁纸...");
+        await invoke("fetch_pexels", { savePath: inputImagePath, apiKey: config.pexels_api_key });
       } else if (config.wallpaper_mode === "wallhaven") {
         addLog(">> 正在拉取 Wallhaven 精选壁纸...");
         await invoke("fetch_wallhaven", { savePath: inputImagePath });
@@ -290,8 +294,8 @@ function App() {
 
   const modeLabel = config.wallpaper_mode === "bing"
     ? "Bing 每日壁纸"
-    : config.wallpaper_mode === "unsplash"
-      ? "Unsplash 高清图库"
+    : config.wallpaper_mode === "pexels"
+      ? "Pexels 高清图库"
       : config.wallpaper_mode === "wallhaven"
         ? "Wallhaven 精选壁纸"
         : config.wallpaper_mode === "picsum"
@@ -496,7 +500,7 @@ function App() {
                     }
                   >
                     <option value="bing">Bing 每日精美壁纸（推荐）</option>
-                    <option value="unsplash">Unsplash 高清摄影（推荐）</option>
+                    <option value="pexels">Pexels 高清摄影（需 API Key）</option>
                     <option value="wallhaven">Wallhaven 精选壁纸</option>
                     <option value="picsum">在线随机图库（Picsum）</option>
                     <option value="local">本地自定义图库（离线模式）</option>
@@ -527,6 +531,22 @@ function App() {
                       value={config.img_api_url}
                       onChange={(e) => setConfig({ ...config, img_api_url: e.target.value })}
                       placeholder="https://picsum.photos/3840/2160"
+                    />
+                  </div>
+                )}
+
+                {config.wallpaper_mode === "pexels" && (
+                  <div className="settings-card-row">
+                    <div className="settings-label">Pexels API Key</div>
+                    <div className="settings-description">
+                      在 <a href="https://www.pexels.com/api/" target="_blank" rel="noopener" style={{ color: "var(--color-apple-blue)" }}>pexels.com/api</a> 免费注册获取 API Key
+                    </div>
+                    <input
+                      className="settings-input"
+                      type="password"
+                      value={config.pexels_api_key}
+                      onChange={(e) => setConfig({ ...config, pexels_api_key: e.target.value })}
+                      placeholder="输入您的 Pexels API Key"
                     />
                   </div>
                 )}
