@@ -4030,6 +4030,7 @@ version = "1.0.0"
 dependencies = [
  "ab_glyph",
  "chrono",
+ "dirs 6.0.0",
  "image",
  "imageproc",
  "rand 0.8.5",

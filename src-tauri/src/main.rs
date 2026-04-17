@@ -356,6 +356,106 @@ async fn fetch_bing_daily(app: AppHandle, save_path: String) -> Result<String, S
     Ok(format!("Bing 壁纸已成功拉取至: {}", path_str))
 }
 
+/// Fetch Unsplash random high-quality photo (no API key needed)
+#[tauri::command]
+async fn fetch_unsplash(app: AppHandle, save_path: String) -> Result<String, String> {
+    let path = resolve_path(&app, &save_path)?;
+
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).map_err(|e| format!("创建目录失败: {}", e))?;
+    }
+
+    let path_clone = path.clone();
+    tokio::task::spawn_blocking(move || {
+        // Unsplash Source API — redirects to a random photo, no API key required
+        // Request 3840x2160 landscape for wallpaper use
+        let url = "https://source.unsplash.com/random/3840x2160?landscape,nature";
+
+        let client = reqwest::blocking::Client::builder()
+            .redirect(reqwest::redirect::Policy::limited(10))
+            .build()
+            .map_err(|e| format!("创建 HTTP 客户端失败: {}", e))?;
+
+        let resp = client
+            .get(url)
+            .header("Accept", "image/jpeg,image/png")
+            .send()
+            .map_err(|e| format!("Unsplash 请求失败: {}", e))?;
+
+        let status = resp.status();
+        if !status.is_success() {
+            return Err(format!("Unsplash 下载失败 (HTTP {})", status));
+        }
+
+        let bytes = resp
+            .bytes()
+            .map_err(|e| format!("读取图片流失败: {}", e))?;
+
+        let mut file = File::create(&path_clone).map_err(|e| format!("创建图片文件失败: {}", e))?;
+        file.write_all(&bytes)
+            .map_err(|e| format!("保存壁纸失败: {}", e))?;
+
+        Ok(())
+    })
+    .await
+    .map_err(|e| format!("任务执行失败: {}", e))??;
+
+    let path_str = path.to_string_lossy().to_string();
+    Ok(format!("Unsplash 壁纸已成功拉取至: {}", path_str))
+}
+
+/// Fetch Wallhaven random high-quality wallpaper (no API key needed for trending)
+#[tauri::command]
+async fn fetch_wallhaven(app: AppHandle, save_path: String) -> Result<String, String> {
+    let path = resolve_path(&app, &save_path)?;
+
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).map_err(|e| format!("创建目录失败: {}", e))?;
+    }
+
+    let path_clone = path.clone();
+    tokio::task::spawn_blocking(move || {
+        // Wallhaven API v1 — search for landscape wallpapers, sorted by favorites
+        let api_url = "https://wallhaven.cc/api/v1/search?categories=111&purity=100&resolutions=3840x2160&sorting=favorites&order=desc&page=1";
+
+        let resp = reqwest::blocking::get(api_url)
+            .map_err(|e| format!("Wallhaven API 请求失败: {}", e))?;
+        let json: serde_json::Value = resp.json().map_err(|e| format!("解析 JSON 失败: {}", e))?;
+
+        let data = json["data"]
+            .as_array()
+            .ok_or("无法从 Wallhaven 数据中提取图片列表")?;
+
+        if data.is_empty() {
+            return Err("Wallhaven 未返回任何壁纸".to_string());
+        }
+
+        // Pick a random wallpaper from the results
+        let mut rng = rand::thread_rng();
+        let idx = rng.gen_range(0..data.len().min(12)); // pick from top 12
+        let img_url = data[idx]["path"]
+            .as_str()
+            .ok_or("无法从 Wallhaven 数据中提取 URL")?;
+
+        let img_resp =
+            reqwest::blocking::get(img_url).map_err(|e| format!("下载图片失败: {}", e))?;
+        let bytes = img_resp
+            .bytes()
+            .map_err(|e| format!("读取图片流失败: {}", e))?;
+
+        let mut file = File::create(&path_clone).map_err(|e| format!("创建图片文件失败: {}", e))?;
+        file.write_all(&bytes)
+            .map_err(|e| format!("保存壁纸失败: {}", e))?;
+
+        Ok(())
+    })
+    .await
+    .map_err(|e| format!("任务执行失败: {}", e))??;
+
+    let path_str = path.to_string_lossy().to_string();
+    Ok(format!("Wallhaven 壁纸已成功拉取至: {}", path_str))
+}
+
 /// Get a random image from a local folder
 #[tauri::command]
 async fn get_random_local_image(folder_path: String) -> Result<String, String> {
@@ -777,6 +877,37 @@ async fn list_favorites(
     Ok(result)
 }
 
+/// Save a wallpaper file to the user's Downloads directory with a meaningful filename.
+/// Returns the absolute path of the saved file.
+#[tauri::command]
+async fn save_wallpaper_to_downloads(
+    app: AppHandle,
+    wallpaper_path: String,
+    _scripture_text: String,
+) -> Result<String, String> {
+    let src = resolve_path(&app, &wallpaper_path)?;
+
+    if !src.exists() {
+        return Err("壁纸文件不存在".to_string());
+    }
+
+    // Determine Downloads directory
+    let downloads_dir = dirs::download_dir()
+        .ok_or_else(|| "无法确定下载目录".to_string())?;
+
+    fs::create_dir_all(&downloads_dir).map_err(|e| format!("创建下载目录失败: {}", e))?;
+
+    // Build filename: scripture_wallpaper_YYYYMMDD_HHMMSS.jpg
+    let timestamp = Local::now().format("%Y%m%d_%H%M%S");
+    let filename = format!("scripture_wallpaper_{}.jpg", timestamp);
+    let dest = downloads_dir.join(&filename);
+
+    fs::copy(&src, &dest).map_err(|e| format!("复制文件失败: {}", e))?;
+
+    let dest_str = dest.to_string_lossy().to_string();
+    Ok(dest_str)
+}
+
 /// Remove a favorite by id
 #[tauri::command]
 async fn remove_favorite(
@@ -896,6 +1027,8 @@ pub fn run() {
             get_random_scripture,
             download_image,
             fetch_bing_daily,
+            fetch_unsplash,
+            fetch_wallhaven,
             get_random_local_image,
             generate_wallpaper,
             set_system_wallpaper,
@@ -906,6 +1039,7 @@ pub fn run() {
             remove_favorite,
             get_font_list,
             ensure_font_downloaded,
+            save_wallpaper_to_downloads,
         ])
         .run(tauri::generate_context!())
         .expect("运行 Tauri 应用时发生错误");

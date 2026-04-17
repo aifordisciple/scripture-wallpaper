@@ -10,7 +10,7 @@ interface AppConfig {
   font_size: number;
   update_time: string;
   font_name: string;
-  wallpaper_mode: "bing" | "picsum" | "local";
+  wallpaper_mode: "bing" | "picsum" | "unsplash" | "wallhaven" | "local";
   local_folder: string;
   img_api_url: string;
   scripture_version: "和合本" | "NIV";
@@ -169,6 +169,12 @@ function App() {
       if (config.wallpaper_mode === "bing") {
         addLog(">> 正在拉取 Bing 壁纸...");
         await invoke("fetch_bing_daily", { savePath: inputImagePath });
+      } else if (config.wallpaper_mode === "unsplash") {
+        addLog(">> 正在拉取 Unsplash 高清壁纸...");
+        await invoke("fetch_unsplash", { savePath: inputImagePath });
+      } else if (config.wallpaper_mode === "wallhaven") {
+        addLog(">> 正在拉取 Wallhaven 精选壁纸...");
+        await invoke("fetch_wallhaven", { savePath: inputImagePath });
       } else if (config.wallpaper_mode === "local") {
         addLog(`>> 正在扫描本地图库: ${config.local_folder}`);
         inputImagePath = await invoke<string>("get_random_local_image", {
@@ -248,6 +254,32 @@ function App() {
     }
   };
 
+  // Download wallpaper to Downloads folder
+  const handleDownloadWallpaper = async (wallpaperPath: string) => {
+    try {
+      const savedPath = await invoke<string>("save_wallpaper_to_downloads", {
+        wallpaperPath,
+        scriptureText: currentScripture || "",
+      });
+      addLog(`[下载] 壁纸已保存至: ${savedPath}`);
+    } catch (err) {
+      addLog(`[下载错误] ${err}`);
+    }
+  };
+
+  // Download a favorite wallpaper to Downloads folder
+  const handleDownloadFavorite = async (imagePath: string, content: string) => {
+    try {
+      const savedPath = await invoke<string>("save_wallpaper_to_downloads", {
+        wallpaperPath: imagePath,
+        scriptureText: content,
+      });
+      addLog(`[下载] 收藏壁纸已保存至: ${savedPath}`);
+    } catch (err) {
+      addLog(`[下载错误] ${err}`);
+    }
+  };
+
   if (!config) {
     return (
       <div className="loading-screen">
@@ -258,9 +290,13 @@ function App() {
 
   const modeLabel = config.wallpaper_mode === "bing"
     ? "Bing 每日壁纸"
-    : config.wallpaper_mode === "picsum"
-      ? "Picsum 随机图库"
-      : "本地自定义图库";
+    : config.wallpaper_mode === "unsplash"
+      ? "Unsplash 高清图库"
+      : config.wallpaper_mode === "wallhaven"
+        ? "Wallhaven 精选壁纸"
+        : config.wallpaper_mode === "picsum"
+          ? "Picsum 随机图库"
+          : "本地自定义图库";
 
   return (
     <div className="app-layout">
@@ -342,6 +378,15 @@ function App() {
                 <div className="preview-card-footer">
                   <div className="preview-label">当前经文</div>
                   <div className="preview-scripture">{currentScripture}</div>
+                  {currentWallpaperPath && (
+                    <button
+                      className="btn btn-ghost preview-download-btn"
+                      onClick={() => handleDownloadWallpaper(currentWallpaperPath)}
+                    >
+                      <span className="btn-icon">&#8615;</span>
+                      下载壁纸
+                    </button>
+                  )}
                 </div>
               </div>
             )}
@@ -383,6 +428,13 @@ function App() {
                         title="设为桌面"
                       >
                         设为桌面
+                      </button>
+                      <button
+                        className="favorite-card-download"
+                        onClick={(e) => { e.stopPropagation(); handleDownloadFavorite(fav.imagePath, fav.content); }}
+                        title="下载壁纸"
+                      >
+                        &#8615;
                       </button>
                     </div>
                     <div className="favorite-card-info">
@@ -444,6 +496,8 @@ function App() {
                     }
                   >
                     <option value="bing">Bing 每日精美壁纸（推荐）</option>
+                    <option value="unsplash">Unsplash 高清摄影（推荐）</option>
+                    <option value="wallhaven">Wallhaven 精选壁纸</option>
                     <option value="picsum">在线随机图库（Picsum）</option>
                     <option value="local">本地自定义图库（离线模式）</option>
                   </select>
