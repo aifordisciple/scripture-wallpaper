@@ -55,6 +55,7 @@ function getLogClassName(log: string): string {
 
 function App() {
   const [activeTab, setActiveTab] = useState<TabId>("dashboard");
+  const [customText, setCustomText] = useState<string>("");
   const [logs, setLogs] = useState<string[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [config, setConfig] = useState<AppConfig | null>(null);
@@ -92,6 +93,9 @@ function App() {
     logsEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [logs]);
 
+  // Ref to always hold the latest executeDailyUpdate for the event listener
+  const executeDailyUpdateRef = useRef<() => void>(() => {});
+
   // Initialize app
   useEffect(() => {
     const initApp = async () => {
@@ -124,8 +128,6 @@ function App() {
     };
     initApp();
 
-    const unlistenUpdate = listen("trigger-update", () => executeDailyUpdate());
-
     const currentWindow = getCurrentWindow();
     const unlistenClose = currentWindow.onCloseRequested(async (event) => {
       event.preventDefault();
@@ -133,8 +135,17 @@ function App() {
     });
 
     return () => {
-      unlistenUpdate.then((f) => f());
       unlistenClose.then((f) => f());
+    };
+  }, []);
+
+  // Event listener for trigger-update (tray menu, global shortcut, cron)
+  useEffect(() => {
+    const unlisten = listen('trigger-update', () => {
+      executeDailyUpdateRef.current();
+    });
+    return () => {
+      unlisten.then((f) => f());
     };
   }, []);
 
@@ -156,11 +167,16 @@ function App() {
     addLog("--- 开始多源壁纸更新流程 ---");
 
     try {
-      const [content, reference] = await invoke<[string, string]>("get_random_scripture", {
-        dbPath: "scriptures.db",
-        version: config.scripture_version,
-      });
-      const fullText = `${content} —— ${reference}`;
+      let fullText: string;
+      if (customText.trim()) {
+        fullText = customText.trim();
+      } else {
+        const [content, reference] = await invoke<[string, string]>("get_random_scripture", {
+          dbPath: "scriptures.db",
+          version: config.scripture_version,
+        });
+        fullText = `${content} —— ${reference}`;
+      }
       setCurrentScripture(fullText);
       addLog(`获取经文: ${fullText}`);
 
@@ -214,7 +230,10 @@ function App() {
     } finally {
       setIsProcessing(false);
     }
-  }, [isProcessing, config]);
+  }, [isProcessing, config, customText]);
+
+  // Keep ref in sync so event listener always calls the latest version
+  executeDailyUpdateRef.current = executeDailyUpdate;
 
   // Favorite wallpaper
   const handleFavorite = async () => {
@@ -341,6 +360,16 @@ function App() {
               <div className="dashboard-hero-subtitle">
                 应用已在后台静默运行，每日 <strong>{config.update_time}</strong> 自动更新桌面壁纸。
               </div>
+            </div>
+
+            <div className="custom-text-input-container">
+              <input
+                type="text"
+                className="settings-input custom-text-input"
+                placeholder="自定义文字（留空则随机经文）"
+                value={customText}
+                onChange={(e) => setCustomText(e.target.value)}
+              />
             </div>
 
             <div className="dashboard-actions">
